@@ -1,20 +1,26 @@
 import os
 from openai import OpenAI
+from flask import Flask, request, jsonify
 from warehouse_env import WarehouseEnv
 
-# 1. Required Environment Variables from Hackathon Guidelines
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
+app = Flask(__name__)
+
+API_BASE_URL = "https://api-inference.huggingface.co/v1/"
+MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct"
 HF_TOKEN = os.getenv("HF_TOKEN")
 
-if HF_TOKEN is None:
-    raise ValueError("HF_TOKEN environment variable is required")
-
-# 2. Must use the OpenAI Client
 client = OpenAI(
     base_url=API_BASE_URL,
     api_key=HF_TOKEN
 )
+
+# Global environment variable
+env = WarehouseEnv()
+task_name = "warehouse-navigation"
+benchmark = "openenv-grid"
+steps = 0
+rewards_history = []
+success = False
 
 def get_action_from_llm(obs):
     prompt = f"""
@@ -25,59 +31,71 @@ def get_action_from_llm(obs):
     Current State:
     {obs}
     
-    Respond with ONLY a single integer representing your chosen action.
+    Respond with ONLY a single number (0, 1, 2, or 3).
     """
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}]
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=10
         )
         action_str = response.choices[0].message.content.strip()
-        action = int(action_str)
-        return action, action_str
+        action_num = ''.join(filter(str.isdigit, action_str))
+        if action_num:
+            return int(action_num[0])
+        else:
+            return 1
     except Exception as e:
-        return 1, "invalid_action"
+        return 1
 
-def run_inference():
-    env = WarehouseEnv()
+# Endpoint 1: Grader yahan Reset request bhejega
+@app.route('/reset', methods=['POST'])
+def reset():
+    global env, steps, rewards_history, success
     obs = env.reset()
-    
-    task_name = "warehouse-navigation"
-    benchmark = "openenv-grid"
-    
     steps = 0
     rewards_history = []
     success = False
     
-    # 3. Exactly formatted START line
     print(f"[START] task={task_name} env={benchmark} model={MODEL_NAME}")
+    return jsonify({"observation": obs})
+
+# Endpoint 2: Grader yahan Step request bhejega
+@app.route('/step', methods=['POST'])
+def step():
+    global env, steps, rewards_history, success
     
-    try:
-        done = False
-        while not done:
-            action, action_str = get_action_from_llm(obs)
-            obs, reward, done, error_msg = env.step(action)
-            
-            steps += 1
-            rewards_history.append(reward)
-            
-            # Format requirements: boolean must be lowercase, reward to 2 decimal places
-            done_str = "true" if done else "false"
-            if reward == 100.0:
-                success = True
-                
-            # 4. Exactly formatted STEP line immediately after env.step()
-            print(f"[STEP] step={steps} action={action_str} reward={reward:.2f} done={done_str} error={error_msg}")
-            
-    except Exception as e:
-        pass # The [END] line is always emitted even on exception
+    obs = env._get_obs()
+    action = get_action_from_llm(obs)
+    
+    obs, reward, done, error_msg = env.step(action)
+    
+    steps += 1
+    rewards_history.append(reward)
+    
+    done_str = "true" if done else "false"
+    if reward == 100.0:
+        success = True
         
-    finally:
+    print(f"[STEP] step={steps} action={action} reward={reward:.2f} done={done_str} error={error_msg}")
+    
+    if done:
         success_str = "true" if success else "false"
         rewards_str = ",".join([f"{r:.2f}" for r in rewards_history]) if rewards_history else "0.00"
-        
-        # 5. Exactly formatted END line
         print(f"[END] success={success_str} steps={steps} rewards={rewards_str}")
+        
+    return jsonify({
+        "observation": obs,
+        "reward": float(reward),
+        "done": done,
+        "error": error_msg
+    })
+
+
+@app.route('/', methods=['GET'])
+def health():
+    return "Warehouse Bot API is Running"
 
 if __name__ == "__main__":
-    run_inference()
+    # Server ko start karna
+    app.run(host="0.0.0.0", port=7860)
