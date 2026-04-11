@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automated Warehouse Robot</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0c10;
+            --panel-bg: rgba(31, 40, 51, 0.7);
+            --text-main: #c5c6c7;
+            --accent-glow: #66fcf1;
+            --accent-dark: #45a29e;
+            --wall-color: #1f2833;
+            --item-color: #f2a900;
+            --dest-color: #27ae60;
+            --robot-color: #e74c3c;
+            --robot-item-color: #9b59b6;
+            --cell-size: 80px;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(69, 162, 158, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(102, 252, 241, 0.1) 0%, transparent 40%);
+        }
+
+        .container {
+            display: flex;
+            gap: 40px;
+            background: var(--panel-bg);
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .header {
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2rem;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(102, 252, 241, 0.5);
+        }
+
+        .header p {
+            margin: 5px 0 0;
+            color: var(--accent-dark);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* The Grid */
+        .grid-wrapper {
+            position: relative;
+            width: fit-content;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 16px;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(5, var(--cell-size));
+            grid-template-rows: repeat(5, var(--cell-size));
+            gap: 8px;
+        }
+
+        .cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        /* Entities */
+        .cell.wall {
+            background: var(--wall-color);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .cell.item::after {
+            content: '';
+            width: 40%;
+            height: 40%;
+            background: var(--item-color);
+            border-radius: 50%;
+            box-shadow: 0 0 15px var(--item-color);
+            animation: pulse-item 2s infinite;
+        }
+
+        .cell.dest::after {
+            content: '';
+            width: 60%;
+            height: 60%;
+            border: 3px dashed var(--dest-color);
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(39, 174, 96, 0.5);
+            animation: spin-slow 10s linear infinite;
+        }
+
+        /* Agent Layer */
+        .agent {
+            position: absolute;
+            width: 60%;
+            height: 60%;
+            background: var(--robot-color);
+            border-radius: 12px;
+            z-index: 10;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 0 20px rgba(231, 76, 60, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .agent.has-item {
+            background: var(--robot-item-color);
+            box-shadow: 0 0 20px rgba(155, 89, 182, 0.6);
+        }
+        
+        .agent::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 15px 0 0 white;
+            transform: translateX(-7.5px);
+        }
+
+        /* Info Panel */
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-width: 280px;
+        }
+
+        .stats-card {
+            background: rgba(0,0,0,0.4);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(102, 252, 241, 0.1);
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 1.1rem;
+        }
+
+        .stat-value {
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .stat-value.glow-green { color: var(--dest-color); text-shadow: 0 0 10px var(--dest-color); }
+        .stat-value.glow-red { color: var(--robot-color); text-shadow: 0 0 10px var(--robot-color); }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        button {
+            font-family: 'Space Grotesk', sans-serif;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: var(--accent-dark);
+            color: #fff;
+            box-shadow: 0 0 15px rgba(69, 162, 158, 0.4);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-glow);
+            color: #000;
+            box-shadow: 0 0 20px rgba(102, 252, 241, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid var(--text-main);
+            color: var(--text-main);
+        }
+
+        .btn-secondary:hover {
+            border-color: #fff;
+            color: #fff;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.4);
+            padding: 15px 20px;
+            border-radius: 12px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--wall-color);
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 4px;
+            bottom: 4px;
+            background-color: #fff;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--accent-dark);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        .terminal {
+            background: #000;
+            color: #0f0;
+            font-family: monospace;
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            height: 100px;
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
+
+        .terminal p { margin: 2px 0; }
+
+        @keyframes pulse-item {
+            0% { transform: scale(1); box-shadow: 0 0 10px var(--item-color); }
+            50% { transform: scale(1.2); box-shadow: 0 0 20px var(--item-color); }
+            100% { transform: scale(1); box-shadow: 0 0 10px var(--item-color); }
+        }
+
+        @keyframes spin-slow {
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Loading Overlay */
+        .loading {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="app-container">
+        <div class="left-panel">
+            <div class="header">
+                <h1>Warehouse Bot</h1>
+                <p>Autonomous Navigation System</p>
+            </div>
+            
+            <div class="grid-wrapper">
+                <div class="grid" id="grid">
+                    <!-- Grid cells generated via JS -->
+                </div>
+                <!-- Agent overlay -->
+                <div class="agent" id="agent"></div>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <div class="stats-card">
+                <div class="stat-row">
+                    <span>Steps</span>
+                    <span class="stat-value" id="step-count">0 / 50</span>
+                </div>
+                <div class="stat-row">
+                    <span>Reward</span>
+                    <span class="stat-value" id="reward-val">0.0</span>
+                </div>
+                <div class="stat-row">
+                    <span>Has Item</span>
+                    <span class="stat-value" id="item-status">False</span>
+                </div>
+                <div class="stat-row">
+                    <span>Status</span>
+                    <span class="stat-value" id="run-status">Ready</span>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button class="btn-primary" id="btn-step" onclick="stepSimulation()">Next Step</button>
+                <button class="btn-secondary" onclick="resetSimulation()">Reset Environment</button>
+                
+                <div class="toggle-container">
+                    <span>Auto Play</span>
+                    <label class="switch">
+                        <input type="checkbox" id="auto-play" onchange="toggleAutoPlay()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="terminal" id="terminal">
+                <p>> System initialized.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const GRID_SIZE = 5;
+        const CELL_GAP = 8;
+        const CELL_SIZE = 80;
+
+        let autoPlayInterval = null;
+        let isProcessing = false;
+        let stepCounter = 0;
+        let totalReward = 0;
+        let simDone = false;
+
+        function logMsg(msg, isError=false) {
+            const term = document.getElementById('terminal');
+            const p = document.createElement('p');
+            p.textContent = `> ${msg}`;
+            if(isError) p.style.color = '#e74c3c';
+            term.appendChild(p);
+            term.scrollTop = term.scrollHeight;
+        }
+
+        function initGrid() {
+            const gridEl = document.getElementById('grid');
+            gridEl.innerHTML = '';
+            for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.id = `cell-${Math.floor(i / GRID_SIZE)}-${i % GRID_SIZE}`;
+                gridEl.appendChild(cell);
+            }
+        }
+
+        function updateUI(data, isReset=false) {
+            if (!data.grid) return;
+
+            // Clear old entities
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cell = document.getElementById(`cell-${r}-${c}`);
+                    cell.className = 'cell'; // reset classes
+                    
+                    const val = data.grid[r][c];
+                    if (val === 1) cell.classList.add('wall');
+                    if (val === 2) cell.classList.add('item');
+                    if (val === 3) cell.classList.add('dest');
+                }
+            }
+
+            // Update Agent Position
+            const agent = document.getElementById('agent');
+            const [r, c] = data.agent_pos;
+            
+            // Calculate absolute position considering gaps and cell sizes
+            // In a grid, left = col * (size + gap), top = row * (size + gap)
+            // Plus some offset to center the agent (60% size = 48px, so (80-48)/2 = 16px)
+            const padding = 10; // from grid-wrapper
+            const leftPos = padding + c * (CELL_SIZE + CELL_GAP) + (CELL_SIZE * 0.2);
+            const topPos = padding + r * (CELL_SIZE + CELL_GAP) + (CELL_SIZE * 0.2);
+            
+            agent.style.left = `${leftPos}px`;
+            agent.style.top = `${topPos}px`;
+            
+            if (data.has_item) {
+                agent.classList.add('has-item');
+                document.getElementById('item-status').textContent = 'True';
+                document.getElementById('item-status').className = 'stat-value glow-green';
+            } else {
+                agent.classList.remove('has-item');
+                document.getElementById('item-status').textContent = 'False';
+                document.getElementById('item-status').className = 'stat-value';
+            }
+
+            if (isReset) {
+                stepCounter = 0;
+                totalReward = 0;
+                simDone = false;
+                document.getElementById('run-status').textContent = 'Ready';
+                document.getElementById('run-status').className = 'stat-value';
+                document.getElementById('btn-step').disabled = false;
+            } else {
+                stepCounter++;
+                if (data.reward) totalReward += data.reward;
+                
+                if (data.done) {
+                    simDone = true;
+                    document.getElementById('btn-step').disabled = true;
+                    if(data.reward > 0) {
+                        document.getElementById('run-status').textContent = 'Success!';
+                        document.getElementById('run-status').className = 'stat-value glow-green';
+                        logMsg("Mission Accomplished! Item Delivered.");
+                    } else {
+                        document.getElementById('run-status').textContent = 'Failed';
+                        document.getElementById('run-status').className = 'stat-value glow-red';
+                        logMsg("Max steps reached or critical failure.");
+                    }
+                    if (autoPlayInterval) {
+                        document.getElementById('auto-play').checked = false;
+                        toggleAutoPlay();
+                    }
+                }
+            }
+
+            document.getElementById('step-count').textContent = `${stepCounter} / 50`;
+            document.getElementById('reward-val').textContent = totalReward.toFixed(1);
+
+            if (data.error && data.error !== 'null') {
+                logMsg(`Error: ${data.error}`, true);
+            }
+        }
+
+        async function resetSimulation() {
+            if (isProcessing) return;
+            isProcessing = true;
+            document.getElementById('app-container').classList.add('loading');
+            
+            try {
+                logMsg("Resetting environment...");
+                const res = await fetch('/reset', { method: 'POST' });
+                const data = await res.json();
+                updateUI(data, true);
+                logMsg("Environment ready.");
+            } catch (err) {
+                logMsg("Failed to reach server.", true);
+            }
+            
+            document.getElementById('app-container').classList.remove('loading');
+            isProcessing = false;
+        }
+
+        async function stepSimulation() {
+            if (isProcessing || simDone) return;
+            isProcessing = true;
+            
+            try {
+                const res = await fetch('/step', { method: 'POST' });
+                const data = await res.json();
+                updateUI(data, false);
+                logMsg(`Step ${stepCounter}: Reward ${data.reward}`);
+            } catch (err) {
+                logMsg("Failed to execute step.", true);
+                if(autoPlayInterval) {
+                    document.getElementById('auto-play').checked = false;
+                    toggleAutoPlay();
+                }
+            }
+            
+            isProcessing = false;
+        }
+
+        function toggleAutoPlay() {
+            const isChecked = document.getElementById('auto-play').checked;
+            if (isChecked) {
+                logMsg("Auto-Play ON");
+                autoPlayInterval = setInterval(() => {
+                    if (!simDone && !isProcessing) {
+                        stepSimulation();
+                    } else if (simDone) {
+                        document.getElementById('auto-play').checked = false;
+                        toggleAutoPlay();
+                    }
+                }, 1000); // 1 step per second
+            } else {
+                logMsg("Auto-Play OFF");
+                clearInterval(autoPlayInterval);
+                autoPlayInterval = null;
+            }
+        }
+
+        // Initialize UI on load
+        window.onload = () => {
+            initGrid();
+            resetSimulation();
+        };
+    </script>
+</body>
+</html>

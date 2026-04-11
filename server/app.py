@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from openai import OpenAI
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 
 class WarehouseEnv:
     def __init__(self):
@@ -95,7 +95,13 @@ env = WarehouseEnv()
 @app.route('/reset', methods=['POST'])
 def reset_endpoint():
     global env
-    return jsonify({"observation": env.reset()})
+    obs = env.reset()
+    return jsonify({
+        "observation": obs,
+        "grid": env.grid.tolist(),
+        "agent_pos": env.agent_pos,
+        "has_item": env.has_item
+    })
 
 @app.route('/step', methods=['POST'])
 def step_endpoint():
@@ -103,9 +109,21 @@ def step_endpoint():
     obs = env._get_obs()
     action = get_action_from_llm(obs)
     obs, reward, done, error_msg = env.step(action)
-    return jsonify({"observation": obs, "reward": reward, "done": done, "error": error_msg})
+    return jsonify({
+        "observation": obs, 
+        "reward": reward, 
+        "done": done, 
+        "error": error_msg,
+        "grid": env.grid.tolist(),
+        "agent_pos": env.agent_pos,
+        "has_item": env.has_item
+    })
 
 @app.route('/', methods=['GET'])
+def index():
+    return render_template('index.html')
+
+@app.route('/health', methods=['GET'])
 def health():
     return "API is Ready for Hackathon Grader"
 
