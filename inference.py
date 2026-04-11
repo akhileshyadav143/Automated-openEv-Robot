@@ -1,31 +1,27 @@
 import numpy as np
+import sys
+import os
 
-# Sirf Logic rahega, koi Flask/Server nahi
-class WarehouseEnv:
-    def __init__(self):
-        self.grid = np.array([
-            [0, 0, 0, 1, 0],
-            [0, 1, 0, 1, 3],
-            [0, 1, 0, 0, 0],
-            [2, 0, 1, 1, 0],
-            [0, 0, 0, 0, 0]
-        ])
-        self.agent_pos = [0, 0]
-        self.has_item = False
-        self.max_steps = 50
-        self.current_step = 0
-
-    def reset(self):
-        self.agent_pos = [0, 0]
-        self.has_item = False
-        self.current_step = 0
-        return "Environment Reset"
-
-    def step(self, action):
-        return "Step Taken", 0.0, False, "null"
+# Ensure server module is discoverable
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from server.app import WarehouseEnv, get_action_from_llm
 
 if __name__ == "__main__":
-    # Ye script bas run hogi aur khatam ho jayegi, port nahi rokegi
+    task_name = "warehouse-navigation"
+    print(f"[START] task={task_name}", flush=True)
+    
     env = WarehouseEnv()
-    print(env.reset())
-    print("Inference check passed without port conflict!")
+    env.reset()
+    
+    total_reward = 0.0
+    done = False
+    
+    while not done and env.current_step < env.max_steps:
+        obs = env._get_obs()
+        action = get_action_from_llm(obs)
+        obs, reward, done, error_msg = env.step(action)
+        
+        total_reward += reward
+        print(f"[STEP] step={env.current_step} reward={reward}", flush=True)
+
+    print(f"[END] task={task_name} score={total_reward} steps={env.current_step}", flush=True)
